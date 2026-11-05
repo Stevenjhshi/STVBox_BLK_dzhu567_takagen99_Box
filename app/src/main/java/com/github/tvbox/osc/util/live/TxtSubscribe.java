@@ -17,11 +17,22 @@ public class TxtSubscribe {
     private static final Pattern GROUP_PATTERN = Pattern.compile("group-title=\"(.*?)\"");
 
     public static void parse(LinkedHashMap<String, LinkedHashMap<String, ArrayList<String>>> linkedHashMap, String str) {
-        if (str.startsWith("#EXTM3U")) {
+        if (str == null) return;
+        str = str.replace("\uFEFF", "").trim();
+        if (str.regionMatches(true, 0, "#EXTM3U", 0, 7)) {
             parseM3u(linkedHashMap, str);
         } else {
             parseTxt(linkedHashMap, str);
         }
+    }
+
+    private static boolean isSupportedUrl(String url) {
+        if (url == null) return false;
+        String lower = url.trim().toLowerCase();
+        return lower.startsWith("http://") || lower.startsWith("https://")
+                || lower.startsWith("rtsp://") || lower.startsWith("rtmp://")
+                || lower.startsWith("udp://") || lower.startsWith("rtp://")
+                || lower.startsWith("mms://");
     }
 
     private static void parseM3u(LinkedHashMap<String, LinkedHashMap<String, ArrayList<String>>> linkedHashMap, String str) {
@@ -31,14 +42,38 @@ public class TxtSubscribe {
             LinkedHashMap<String, ArrayList<String>> channel = new LinkedHashMap<>();
             LinkedHashMap<String, ArrayList<String>> channelTemp = channel;
             String line;
+            String pendingGroup = null;
             while ((line = bufferedReader.readLine()) != null) {
-                if (line.equals("")) continue;
+                line = line.trim();
+                if (line.isEmpty()) continue;
                 if (line.startsWith("#EXTM3U")) continue;
+                if (line.startsWith("#EXTVLCOPT")) continue;
+                if (line.startsWith("#EXT-X-")) continue;
+                if (line.startsWith("#EXTGRP:")) {
+                    pendingGroup = line.substring("#EXTGRP:".length()).trim();
+                    continue;
+                }
                 if (line.startsWith("#EXTINF")) {
                     String name = getStrByRegex(NAME_PATTERN, line);
                     String group = getStrByRegex(GROUP_PATTERN, line);
+                    if ("未分组".equals(group) && pendingGroup != null && !pendingGroup.isEmpty()) {
+                        group = pendingGroup;
+                    }
                     // 此时再读取一行，就是对应的 url 链接了
-                    String url = bufferedReader.readLine().trim();
+                    String url = null;
+                    String nextLine;
+                    while ((nextLine = bufferedReader.readLine()) != null) {
+                        nextLine = nextLine.trim();
+                        if (nextLine.isEmpty()) continue;
+                        if (nextLine.startsWith("#EXTGRP:")) {
+                            pendingGroup = nextLine.substring("#EXTGRP:".length()).trim();
+                            continue;
+                        }
+                        if (nextLine.startsWith("#")) continue;
+                        url = nextLine;
+                        break;
+                    }
+                    if (url == null || !isSupportedUrl(url)) continue;
                     if (linkedHashMap.containsKey(group)) {
                         channelTemp = linkedHashMap.get(group);
                     } else {
@@ -95,7 +130,7 @@ public class TxtSubscribe {
                             String trim2 = split[0].trim();
                             for (String str2 : split[1].trim().split("#")) {
                                 String trim3 = str2.trim();
-                                if (!trim3.isEmpty() && (trim3.startsWith("http") || trim3.startsWith("rtsp") || trim3.startsWith("rtmp"))) {
+                                if (!trim3.isEmpty() && isSupportedUrl(trim3)) {
                                     if (!linkedHashMap3.containsKey(trim2)) {
                                         arrayList = new ArrayList<>();
                                         linkedHashMap3.put(trim2, arrayList);

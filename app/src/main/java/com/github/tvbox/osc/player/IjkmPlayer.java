@@ -39,8 +39,8 @@ public class IjkmPlayer extends IjkPlayer {
     @Override
     public void setOptions() {
         IJKCode codecTmp = this.codec == null ? ApiConfig.get().getCurrentIJKCode() : this.codec;
-        LinkedHashMap<String, String> options = codecTmp.getOption();
-        if (options != null) {
+        if (codecTmp != null && codecTmp.getOption() != null) {
+            LinkedHashMap<String, String> options = codecTmp.getOption();
             for (String key : options.keySet()) {
                 String value = options.get(key);
                 String[] opt = key.split("\\|");
@@ -56,8 +56,6 @@ public class IjkmPlayer extends IjkPlayer {
         }
         //开启内置字幕
         mMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "subtitle", 1);
-        mMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_FORMAT, "dns_cache_clear", 1);
-        mMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_FORMAT, "dns_cache_timeout", -1);
         mMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_FORMAT,"safe",0);
         super.setOptions();
     }
@@ -85,6 +83,29 @@ public class IjkmPlayer extends IjkPlayer {
                         mMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_FORMAT, "auto_save_map", 1);
                         mMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_FORMAT, "cache_max_capacity", 60 * 1024 * 1024);
                         path = "ijkio:cache:ffio:" + path;
+                    }
+                }
+                String lowerPath = path.toLowerCase();
+                boolean isNetworkStream = lowerPath.startsWith("http://") || lowerPath.startsWith("https://")
+                        || lowerPath.startsWith("rtsp://") || lowerPath.startsWith("rtmp://")
+                        || lowerPath.startsWith("udp://") || lowerPath.startsWith("rtp://")
+                        || lowerPath.startsWith("mms://");
+                if (isNetworkStream) {
+                    mMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_FORMAT, "max-buffer-size", 15 * 1024 * 1024);
+                    mMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "packet-buffering", 1);
+                    mMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_FORMAT, "analyzeduration", 1000000);
+                    mMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_FORMAT, "probesize", 4 * 1024 * 1024);
+                    boolean isLiveStream = lowerPath.startsWith("rtsp://") || lowerPath.startsWith("rtmp://")
+                            || lowerPath.startsWith("udp://") || lowerPath.startsWith("rtp://")
+                            || lowerPath.startsWith("mms://")
+                            || ((lowerPath.startsWith("http://") || lowerPath.startsWith("https://"))
+                            && !lowerPath.contains(".mp4") && !lowerPath.contains(".mkv") && !lowerPath.contains(".avi"));
+                    if (isLiveStream) {
+                        mMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_FORMAT, "infbuf", 1);
+                        mMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "framedrop", 1);
+                        mMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_FORMAT, "reconnect", 1);
+                        mMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_FORMAT, "reconnect_streamed", 1);
+                        mMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_FORMAT, "reconnect_delay_max", 5);
                     }
                 }
             }

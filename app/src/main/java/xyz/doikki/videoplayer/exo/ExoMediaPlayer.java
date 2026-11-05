@@ -71,14 +71,18 @@ public class ExoMediaPlayer extends AbstractPlayer implements Player.Listener {
         }
         //https://github.com/androidx/media/blob/release/libraries/decoder_ffmpeg/README.md
         mRenderersFactory.setExtensionRendererMode(HawkUtils.getExoRendererModeActualValue());
+        mRenderersFactory.setEnableDecoderFallback(true);
 
         if (mTrackSelector == null) {
             mTrackSelector = new DefaultTrackSelector(mAppContext);
         }
         if (mLoadControl == null) {
-            mLoadControl = new DefaultLoadControl();
+            mLoadControl = new DefaultLoadControl.Builder()
+                    .setBufferDurationsMs(15000, 60000, 1000, 3000)
+                    .setPrioritizeTimeOverSizeThresholds(true)
+                    .build();
         }
-        mTrackSelector.setParameters(mTrackSelector.getParameters().buildUpon().setPreferredTextLanguage(Locale.getDefault().getISO3Language()).setTunnelingEnabled(true));
+        mTrackSelector.setParameters(mTrackSelector.getParameters().buildUpon().setPreferredTextLanguage(Locale.getDefault().getISO3Language()).setTunnelingEnabled(false));
         /*mMediaPlayer = new ExoPlayer.Builder(
                 mAppContext,
                 mRenderersFactory,
@@ -107,6 +111,7 @@ public class ExoMediaPlayer extends AbstractPlayer implements Player.Listener {
     public void setDataSource(String path, Map<String, String> headers) {
         this.path = path;
         this.headers = headers;
+        if (path == null) return;
         mMediaSource = mMediaSourceHelper.getMediaSource(path, headers);
         errorCode = -1;
     }
@@ -251,6 +256,7 @@ public class ExoMediaPlayer extends AbstractPlayer implements Player.Listener {
 
     @Override
     public void setOptions() {
+        if (mMediaPlayer == null) return;
         //准备好就开始播放
         mMediaPlayer.setPlayWhenReady(true);
     }
@@ -292,6 +298,10 @@ public class ExoMediaPlayer extends AbstractPlayer implements Player.Listener {
 
     @Override
     public void onPlaybackStateChanged(int playbackState) {
+        if (playbackState == Player.STATE_READY) {
+            retriedTimes = 0;
+            errorCode = -1;
+        }
         if (mPlayerEventListener == null) return;
         if (mIsPreparing) {
             if (playbackState == Player.STATE_READY) {

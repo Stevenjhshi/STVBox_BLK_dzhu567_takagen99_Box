@@ -160,7 +160,7 @@ public class ApiConfig {
         } else if (apiUrl.startsWith("clan")) {
             configUrl = clanToAddress(apiUrl);
         } else if (!apiUrl.startsWith("http")) {
-            configUrl = "http://" + configUrl;
+            configUrl = "http://" + apiUrl;
         } else {
             configUrl = apiUrl;
         }
@@ -304,8 +304,18 @@ public class ApiConfig {
     }
 
     private void parseJson(String apiUrl, String jsonStr) {
+        // 异常时保护已加载数据，不让解析失败破坏现有配置
+        try {
+            parseJsonInternal(apiUrl, jsonStr);
+        } catch (Throwable th) {
+            th.printStackTrace();
+        }
+    }
+
+    private void parseJsonInternal(String apiUrl, String jsonStr) {
 
         JsonObject infoJson = new Gson().fromJson(jsonStr, JsonObject.class);
+        if (infoJson == null) return;
         // spider
         spider = DefaultConfig.safeJsonString(infoJson, "spider", "");
         // wallpaper
@@ -314,6 +324,7 @@ public class ApiConfig {
         livePlayHeaders = infoJson.getAsJsonArray("livePlayHeaders");
         // 远端站点源
         SourceBean firstSite = null;
+        LinkedHashMap<String, SourceBean> tempSourceBeanList = new LinkedHashMap<>();
         JsonArray sites = infoJson.has("video") ? infoJson.getAsJsonObject("video").getAsJsonArray("sites") : infoJson.get("sites").getAsJsonArray();
         for (JsonElement opt : sites) {
             JsonObject obj = (JsonObject) opt;
@@ -339,8 +350,10 @@ public class ApiConfig {
             sb.setClickSelector(DefaultConfig.safeJsonString(obj, "click", ""));
             if (firstSite == null && sb.getHide() == 0)
                 firstSite = sb;
-            sourceBeanList.put(siteKey, sb);
+            tempSourceBeanList.put(siteKey, sb);
         }
+        sourceBeanList.clear();
+        sourceBeanList.putAll(tempSourceBeanList);
         if (sourceBeanList != null && sourceBeanList.size() > 0) {
             String home = Hawk.get(HawkConfig.HOME_API, "");
             SourceBean sh = getSource(home);
@@ -352,7 +365,7 @@ public class ApiConfig {
         // 需要使用vip解析的flag
         vipParseFlags = DefaultConfig.safeJsonStringList(infoJson, "flags");
         // 解析地址
-        parseBeanList.clear();
+        ArrayList<ParseBean> tempParseBeanList = new ArrayList<>();
         if (infoJson.has("parses")) {
             JsonArray parses = infoJson.get("parses").getAsJsonArray();
             for (JsonElement opt : parses) {
@@ -363,9 +376,11 @@ public class ApiConfig {
                 String ext = obj.has("ext") ? obj.get("ext").getAsJsonObject().toString() : "";
                 pb.setExt(ext);
                 pb.setType(DefaultConfig.safeJsonInt(obj, "type", 0));
-                parseBeanList.add(pb);
+                tempParseBeanList.add(pb);
             }
         }
+        parseBeanList.clear();
+        parseBeanList.addAll(tempParseBeanList);
         // 获取默认解析
         if (parseBeanList != null && parseBeanList.size() > 0) {
             String defaultParse = Hawk.get(HawkConfig.DEFAULT_PARSE, "");
@@ -379,11 +394,12 @@ public class ApiConfig {
         }
 
         // takagen99: Check if Live URL is setup in Settings, if no, get from File Config
-        liveChannelGroupList.clear();           //修复从后台切换重复加载频道列表
         String liveURL = Hawk.get(HawkConfig.LIVE_URL, "");
         String epgURL  = Hawk.get(HawkConfig.EPG_URL, "");
 
         String liveURL_final = null;
+        boolean liveSectionOk = false;
+        ArrayList<LiveChannelGroup> tempLiveChannelGroupList = new ArrayList<>();
         try {
             if (infoJson.has("lives") && infoJson.get("lives").getAsJsonArray() != null) {
                 JsonObject livesOBJ = infoJson.get("lives").getAsJsonArray().get(0).getAsJsonObject();
@@ -447,7 +463,7 @@ public class ApiConfig {
 
                     // if FongMi Live URL Formatting exists
                     if (!lives.contains("type")) {
-                        loadLives(infoJson.get("lives").getAsJsonArray());
+                        tempLiveChannelGroupList.addAll(parseLivesArray(infoJson.get("lives").getAsJsonArray()));
                     } else {
                         JsonObject fengMiLives = infoJson.get("lives").getAsJsonArray().get(0).getAsJsonObject();
                         Hawk.put(HawkConfig.LIVE_PLAYER_TYPE, DefaultConfig.safeJsonInt(fengMiLives, "playerType", -1));
@@ -496,12 +512,17 @@ public class ApiConfig {
                 liveURL_final = "http://127.0.0.1:9978/proxy?do=live&type=txt&ext=" + liveURL_final;
                 LiveChannelGroup liveChannelGroup = new LiveChannelGroup();
                 liveChannelGroup.setGroupName(liveURL_final);
-                liveChannelGroupList.add(liveChannelGroup);
+                tempLiveChannelGroupList.add(liveChannelGroup);
             }
 
-
+            liveSectionOk = true;
         } catch (Throwable th) {
             th.printStackTrace();
+        }
+        //修复从后台切换重复加载频道列表；仅在解析成功时提交，失败保留已加载数据
+        if (liveSectionOk) {
+            liveChannelGroupList.clear();
+            liveChannelGroupList.addAll(tempLiveChannelGroupList);
         }
 
         // Video parse rule for host
@@ -628,7 +649,17 @@ public class ApiConfig {
     }
 
     public void loadLives(JsonArray livesArray) {
-        liveChannelGroupList.clear();
+        try {
+            ArrayList<LiveChannelGroup> tempGroupList = parseLivesArray(livesArray);
+            liveChannelGroupList.clear();
+            liveChannelGroupList.addAll(tempGroupList);
+        } catch (Throwable th) {
+            th.printStackTrace();
+        }
+    }
+
+    private ArrayList<LiveChannelGroup> parseLivesArray(JsonArray livesArray) {
+        ArrayList<LiveChannelGroup> tempGroupList = new ArrayList<>();
         int groupIndex = 0;
         int channelIndex = 0;
         int channelNum = 0;
@@ -667,8 +698,9 @@ public class ApiConfig {
                 liveChannelItem.setChannelUrls(sourceUrls);
                 liveChannelGroup.getLiveChannels().add(liveChannelItem);
             }
-            liveChannelGroupList.add(liveChannelGroup);
+            tempGroupList.add(liveChannelGroup);
         }
+        return tempGroupList;
     }
 
     public String getSpider() {
@@ -767,6 +799,8 @@ public class ApiConfig {
     }
 
     public IJKCode getIJKCodec(String name) {
+        if (ijkCodes == null || ijkCodes.isEmpty())
+            return null;
         for (IJKCode code : ijkCodes) {
             if (code.getName().equals(name))
                 return code;

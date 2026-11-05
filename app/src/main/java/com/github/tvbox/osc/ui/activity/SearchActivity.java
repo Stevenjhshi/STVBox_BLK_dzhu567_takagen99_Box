@@ -557,6 +557,13 @@ public class SearchActivity extends BaseActivity {
                 }
             }
         });
+        // FlowLayout 内部生成的 TextView 只调用了 setClickable，未设置 focusable，
+        // 导致 TV 遥控器方向键无法把焦点落到"搜索历史"的标签上，这里补上焦点属性
+        for (int i = 0; i < tv_history.getChildCount(); i++) {
+            View child = tv_history.getChildAt(i);
+            child.setFocusable(true);
+            child.setFocusableInTouchMode(false);
+        }
     }
 
     private void initViewModel() {

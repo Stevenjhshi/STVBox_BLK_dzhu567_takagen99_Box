@@ -211,15 +211,29 @@ public class M3U8 {
     }
 
     private static boolean shouldResolve(String line) {
-        return (!line.startsWith("#") && !line.startsWith("http")) || line.startsWith(TAG_KEY);
+        if (line == null) return false;
+        String trimmed = line.trim();
+        if (trimmed.isEmpty()) return false;
+        if (trimmed.startsWith(TAG_KEY)) return true;
+        if (trimmed.startsWith("#")) return false;
+        String lower = trimmed.toLowerCase();
+        if (lower.startsWith("http") || lower.startsWith("data:") || lower.startsWith("rtmp")) return false;
+        return true;
     }
 
     private static String resolve(String base, String line) {
         if (line.startsWith(TAG_KEY)) {
             Matcher matcher = REGEX_URI.matcher(line);
             String value = matcher.find() ? matcher.group(1) : null;
-            return value == null ? line : line.replace(value, UriUtil.resolve(base, value));
+            if (value == null || value.isEmpty()) return line;
+            String lower = value.toLowerCase();
+            if (lower.startsWith("http") || lower.startsWith("data:") || lower.startsWith("rtmp")) return line;
+            return line.replace(value, UriUtil.resolve(base, value));
         } else {
+            String trimmed = line.trim();
+            if (trimmed.isEmpty()) return line;
+            String lower = trimmed.toLowerCase();
+            if (lower.startsWith("http") || lower.startsWith("data:") || lower.startsWith("rtmp")) return line;
             return UriUtil.resolve(base, line);
         }
     }

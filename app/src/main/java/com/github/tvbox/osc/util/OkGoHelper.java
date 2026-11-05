@@ -27,7 +27,9 @@ import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
 
 import okhttp3.Cache;
+import okhttp3.ConnectionPool;
 import okhttp3.ConnectionSpec;
+import okhttp3.Dispatcher;
 import okhttp3.HttpUrl;
 import okhttp3.OkHttpClient;
 import okhttp3.dnsoverhttps.DnsOverHttps;
@@ -77,7 +79,9 @@ public class OkGoHelper {
         } catch (Throwable th) {
             th.printStackTrace();
         }
-        builder.dns(dnsOverHttps);
+        if (dnsOverHttps != null) {
+            builder.dns(dnsOverHttps);
+        }
 
         ExoMediaSourceHelper.getInstance(App.getInstance()).setOkClient(builder.build());
     }
@@ -143,7 +147,11 @@ public class OkGoHelper {
         builder.cache(new Cache(new File(App.getInstance().getCacheDir().getAbsolutePath(), "dohcache"), 10 * 1024 * 1024));
         OkHttpClient dohClient = builder.build();
         String dohUrl = getDohUrl(Hawk.get(HawkConfig.DOH_URL, 0));
-        dnsOverHttps = new DnsOverHttps.Builder().client(dohClient).url(dohUrl.isEmpty() ? null : HttpUrl.get(dohUrl)).build();
+        if (dohUrl.isEmpty()) {
+            dnsOverHttps = null;
+        } else {
+            dnsOverHttps = new DnsOverHttps.Builder().client(dohClient).url(HttpUrl.get(dohUrl)).build();
+        }
     }
 
     static OkHttpClient defaultClient = null;
@@ -174,10 +182,17 @@ public class OkGoHelper {
         //builder.retryOnConnectionFailure(false);
         builder.connectionSpecs(getConnectionSpec());
         builder = builder.addInterceptor(loggingInterceptor)
-                .readTimeout(DEFAULT_MILLISECONDS, TimeUnit.MILLISECONDS)
+                .readTimeout(30000, TimeUnit.MILLISECONDS)
                 .writeTimeout(DEFAULT_MILLISECONDS, TimeUnit.MILLISECONDS)
-                .connectTimeout(DEFAULT_MILLISECONDS, TimeUnit.MILLISECONDS)
-                .dns(dnsOverHttps);
+                .connectTimeout(15000, TimeUnit.MILLISECONDS)
+                .connectionPool(new ConnectionPool(10, 5, TimeUnit.MINUTES));
+        Dispatcher dispatcher = new Dispatcher();
+        dispatcher.setMaxRequests(64);
+        dispatcher.setMaxRequestsPerHost(16);
+        builder.dispatcher(dispatcher);
+        if (dnsOverHttps != null) {
+            builder.dns(dnsOverHttps);
+        }
         try {
             setOkHttpSsl(builder);
         } catch (Throwable th) {

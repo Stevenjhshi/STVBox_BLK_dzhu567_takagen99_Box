@@ -80,6 +80,7 @@ import com.github.tvbox.osc.util.HawkUtils;
 import com.github.tvbox.osc.util.LOG;
 import com.github.tvbox.osc.util.M3U8;
 import com.github.tvbox.osc.util.MD5;
+import com.github.tvbox.osc.util.OkGoHelper;
 import com.github.tvbox.osc.util.PlayerHelper;
 import com.github.tvbox.osc.util.StringUtils;
 import com.github.tvbox.osc.util.SubtitleHelper;
@@ -122,7 +123,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import okhttp3.OkHttpClient;
 
 import master.flame.danmaku.danmaku.model.BaseDanmaku;
 import master.flame.danmaku.danmaku.model.IDisplayer;
@@ -697,8 +701,13 @@ public class PlayFragment extends BaseLazyFragment {
         }
 
 
+        OkHttpClient m3u8Client = OkGoHelper.getDefaultClient().newBuilder()
+                .connectTimeout(5000, TimeUnit.MILLISECONDS)
+                .readTimeout(5000, TimeUnit.MILLISECONDS)
+                .build();
         OkGo.<String>get(url)
                 .tag("m3u8-1")
+                .client(m3u8Client)
                 .headers(hheaders)
                 .execute(new AbsCallback<String>() {
                     @Override
@@ -750,8 +759,13 @@ public class PlayFragment extends BaseLazyFragment {
                             return;
                         }
                         final String finalforwardurl = forwardurl;
+                        OkHttpClient forwardClient = OkGoHelper.getDefaultClient().newBuilder()
+                                .connectTimeout(5000, TimeUnit.MILLISECONDS)
+                                .readTimeout(5000, TimeUnit.MILLISECONDS)
+                                .build();
                         OkGo.<String>get(forwardurl)
                                 .tag("m3u8-2")
+                                .client(forwardClient)
                                 .headers(hheaders)
                                 .execute(new AbsCallback<String>() {
                                     @Override
